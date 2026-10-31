@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "beancount-provenance"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pre-commit hook: fail if a Beancount ledger gains a transaction with no provenance, payee or narration."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,6 +26,7 @@ Issues = "https://github.com/greenlight908/beancount-provenance/issues"
 
 [project.scripts]
 check-beancount-provenance = "beancount_provenance.cli:main"
+backfill-beancount-provenance = "beancount_provenance.backfill:main"
 
 [dependency-groups]
 dev = [

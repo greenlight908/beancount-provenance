@@ -34,7 +34,7 @@ Known limit: a change that fixes one old gap and adds one new one nets to zero a
 ```yaml
 repos:
   - repo: https://github.com/greenlight908/beancount-provenance
-    rev: <commit sha>  # v0.2.0
+    rev: <commit sha>  # v0.3.0
     hooks:
       - id: check-beancount-provenance
 ```
@@ -46,6 +46,25 @@ By hand: `check-beancount-provenance [--ledger main.beancount]`. Output is JSON;
 
 The hook runs in pre-commit's own environment, so a ledger that loads a custom plugin must
 list it under the hook's `additional_dependencies`.
+
+## Backfilling an existing ledger
+
+`backfill-beancount-provenance` stamps every untraceable transaction from evidence it
+records about itself, as the ledger declares in `.beancount-provenance.toml`:
+
+```toml
+[[backfill.rule]]
+id = "rt-ticket"
+when_any = ["cbdrt_id"]          # applies if any of these keys is present
+match = "^RT\\d+$"               # optional regex on that key's value
+source = "RT ticket {cbdrt_id}"  # template over the rule's own keys
+script = "{imported_with_file}"  # optional; dropped if its key is absent
+```
+
+First match wins; no match (or no config) gives `source: "legacy"`. Every stamp adds
+`provenance: "inferred <date> by beancount-provenance backfill rule <id>"`. It plans by
+default and writes only with `--apply`; a blank `source`/`script` key already present is
+refused for a human. Then set the `provenance` baseline to 0 and declare `legacy`.
 
 ## Prior art
 
