@@ -84,7 +84,7 @@ class TestCounting:
         body = '\n2010-01-02 pad Assets:Cash Equity:Opening\n2010-01-03 balance Assets:Cash 50.00 GBP\n  source: "statement"\n'
         entries = load(tmp_path, body)
         assert any(getattr(e, "flag", None) == "P" for e in entries), "control: the pad must have been expanded"
-        assert count_gaps(entries) == {"provenance": 0, "payee": 0, "narration": 0, "legacy": 0}
+        assert count_gaps(entries) == {"provenance": 0, "payee": 0, "narration": 0, "legacy": 0, "balance": 0}
 
 
 class TestBaselines:
@@ -100,7 +100,7 @@ class TestBaselines:
         assert read_baselines(entries) == {}
 
 
-GAPS = {"provenance": 10, "payee": 3, "narration": 0, "legacy": 0}
+GAPS = {"provenance": 10, "payee": 3, "narration": 0, "legacy": 0, "balance": 0}
 # Baselines as a ledger that never adopted `legacy` declares them.
 DECLARED = {"provenance": 10, "payee": 3, "narration": 0}
 
@@ -150,3 +150,30 @@ class TestLegacy:
     def test_no_legacy_and_no_legacy_baseline_passes(self):
         """Ledgers that never adopted `legacy` must not start failing on upgrade."""
         assert evaluate(dict(GAPS), dict(DECLARED))["ok"] is True
+
+
+class TestBalance:
+    """P2: a `balance` assertion carries provenance too; pads stay exempt (ADR 0007)."""
+
+    def test_an_unsourced_balance_is_a_balance_gap_not_a_transaction_gap(self, tmp_path: Path):
+        entries = load(tmp_path, "\n2010-01-03 balance Assets:Cash 0.00 GBP\n")
+        gaps = count_gaps(entries)
+        assert (gaps["provenance"], gaps["balance"]) == (0, 1)
+
+    def test_a_sourced_balance_is_not_a_gap(self, tmp_path: Path):
+        entries = load(tmp_path, '\n2010-01-03 balance Assets:Cash 0.00 GBP\n  source: "statement"\n')
+        assert count_gaps(entries)["balance"] == 0
+
+    def test_a_legacy_balance_counts_as_legacy(self, tmp_path: Path):
+        entries = load(tmp_path, '\n2010-01-03 balance Assets:Cash 0.00 GBP\n  source: "legacy"\n')
+        gaps = count_gaps(entries)
+        assert (gaps["balance"], gaps["legacy"]) == (0, 1)
+
+    def test_a_pad_is_not_a_balance_gap(self, tmp_path: Path):
+        entries = load(tmp_path, '\n2010-01-02 pad Assets:Cash Equity:Opening\n2010-01-03 balance Assets:Cash 5.00 GBP\n  source: "s"\n')
+        assert count_gaps(entries)["balance"] == 0
+
+    def test_an_undeclared_balance_baseline_is_zero(self):
+        verdict = evaluate({**GAPS, "balance": 2}, dict(DECLARED))
+        assert verdict["missing"] == []
+        assert [(r["metric"], r["delta"]) for r in verdict["grown"]] == [("balance", 2)]

@@ -19,6 +19,9 @@ The ledger declares its backlog and the count may only shrink:
 - **`legacy` is the explicit unknown.** A backfill that finds no evidence of an entry's
   origin writes `source: "legacy"`. That is neither a gap nor provenance: it is counted as
   its own `legacy` metric, whose undeclared baseline is 0, so the default can only fail.
+- **Balance assertions too.** A `balance` with no `source`/`script` is counted as its own
+  `balance` metric (undeclared baseline 0, like `legacy`); the backfill stamps them as well.
+  `pad` directives are exempt: they are derived from the assertion that follows them.
 - **Per transaction**, not per posting.
 - **Pads are exempt.** The `P` transactions beancount generates from a `pad` carry no
   metadata of their own; the `balance` assertion behind them is what has a source.
@@ -34,7 +37,7 @@ Known limit: a change that fixes one old gap and adds one new one nets to zero a
 ```yaml
 repos:
   - repo: https://github.com/greenlight908/beancount-provenance
-    rev: <commit sha>  # v0.3.0
+    rev: <commit sha>  # v0.4.0
     hooks:
       - id: check-beancount-provenance
 ```

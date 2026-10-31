@@ -16,7 +16,7 @@ from beancount.core import data, flags
 # is an attribute of provenance, not a substitute for wasDerivedFrom/wasGeneratedBy).
 PROVENANCE_KEYS = ("source", "script")
 
-METRICS = ("provenance", "payee", "narration", "legacy")
+METRICS = ("provenance", "payee", "narration", "legacy", "balance")
 
 # `source: "legacy"` with no `script` is the explicit "unknown" a backfill writes where an
 # entry records no evidence of its origin (mike.dotfiles ADR 0014). It is not a gap, but
@@ -26,7 +26,7 @@ LEGACY_SOURCE = "legacy"
 # Metrics whose undeclared baseline means 0 rather than "unmeasured". Zero is the
 # strictest value, so the default can only fail a ledger, never hide anything; and a
 # ledger that has never written `legacy` need not declare it.
-DEFAULT_ZERO = frozenset({"legacy"})
+DEFAULT_ZERO = frozenset({"legacy", "balance"})
 
 # `<date> custom "wnd-baseline" "<metric>" "<count>"` in the ledger.
 BASELINE_DIRECTIVE = "wnd-baseline"
@@ -36,8 +36,13 @@ def _blank(value: object) -> bool:
     return not str(value or "").strip()
 
 
+def _is_legacy(meta: dict[str, Any]) -> bool:
+    return _blank(meta.get("script")) and str(meta.get("source")).strip() == LEGACY_SOURCE
+
+
 def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
-    """Count transactions missing provenance, payee and narration, and `legacy` ones.
+    """Count transactions missing provenance, payee and narration; `balance` assertions
+    missing provenance; and entries of either kind marked `legacy`.
 
     Per transaction, not per posting: provenance describes the entry's origin. The
     transactions beancount synthesises from a `Pad` at load time carry no metadata of
@@ -46,12 +51,21 @@ def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
     """
     gaps: dict[str, int] = dict.fromkeys(METRICS, 0)
     for entry in entries:
+        if isinstance(entry, data.Balance):
+            # An assertion is the reconciliation authority; its source is the statement
+            # (mike.dotfiles ADR 0007, P2). It has no payee or narration.
+            meta = entry.meta or {}
+            if all(_blank(meta.get(key)) for key in PROVENANCE_KEYS):
+                gaps["balance"] += 1
+            elif _is_legacy(meta):
+                gaps["legacy"] += 1
+            continue
         if not isinstance(entry, data.Transaction) or entry.flag == flags.FLAG_PADDING:
             continue
         meta = entry.meta or {}
         if all(_blank(meta.get(key)) for key in PROVENANCE_KEYS):
             gaps["provenance"] += 1
-        elif _blank(meta.get("script")) and str(meta.get("source")).strip() == LEGACY_SOURCE:
+        elif _is_legacy(meta):
             gaps["legacy"] += 1
         if _blank(entry.payee):
             gaps["payee"] += 1

@@ -136,6 +136,32 @@ class TestPlanAndApply:
         assert plan(path, RULES, today="2026-10-31").stamps == []
 
 
+class TestBalanceBackfill:
+    def test_unsourced_balances_are_planned_and_stamped(self, tmp_path):
+        path = _ledger(tmp_path, '\n2010-01-03 balance Assets:Cash 0.00 GBP\n2010-01-04 balance Assets:Cash 0.00 GBP\n  description: "x"\n')
+        p = plan(path, RULES, today="2026-10-31")
+        assert [s.stamp.rule for s in p.stamps] == ["no-evidence", "no-evidence"]
+        apply(p)
+        gaps = count_gaps(_load(path))
+        assert (gaps["balance"], gaps["legacy"]) == (0, 2)
+        assert plan(path, RULES, today="2026-10-31").stamps == []
+
+
+class TestIndentation:
+    def test_a_balance_followed_by_a_blank_line_gets_indented_metadata(self, tmp_path):
+        """A blank next line has no indent to copy; "\n".lstrip() once made the indent a newline."""
+        path = _ledger(tmp_path, "\n2010-01-03 balance Assets:Cash 0.00 GBP\n\n2010-01-04 close Assets:Cash\n")
+        apply(plan(path, RULES, today="2026-10-31"))
+        assert '2010-01-03 balance Assets:Cash 0.00 GBP\n  source: "legacy"\n  provenance: ' in path.read_text(encoding="utf-8")
+        _load(path)
+
+    def test_a_balance_followed_by_an_unindented_directive_gets_the_default_indent(self, tmp_path):
+        path = _ledger(tmp_path, "\n2010-01-03 balance Assets:Cash 0.00 GBP\n2010-01-04 close Assets:Cash\n")
+        apply(plan(path, RULES, today="2026-10-31"))
+        assert '0.00 GBP\n  source: "legacy"\n' in path.read_text(encoding="utf-8")
+        _load(path)
+
+
 class TestCli:
     def test_plan_is_the_default_and_apply_writes(self, tmp_path, capsys):
         path = _ledger(tmp_path, _txn())
