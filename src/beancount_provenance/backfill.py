@@ -145,7 +145,8 @@ def plan(ledger: Path, rules: list[Rule], today: str) -> Plan:
         raise LedgerError(f"ledger has {len(errors)} validation error(s); run bean-check")
     out = Plan(today)
     for entry in entries:
-        if not isinstance(entry, data.Transaction) or entry.flag == flags.FLAG_PADDING:
+        is_txn = isinstance(entry, data.Transaction) and entry.flag != flags.FLAG_PADDING
+        if not (is_txn or isinstance(entry, data.Balance)):
             continue
         meta = entry.meta or {}
         if not all(_blank(meta.get(k)) for k in PROVENANCE_KEYS):
@@ -153,7 +154,7 @@ def plan(ledger: Path, rules: list[Rule], today: str) -> Plan:
         if any(k in meta for k in PROVENANCE_KEYS):
             out.refused.append({"file": meta["filename"], "lineno": meta["lineno"], "reason": "blank provenance key present"})
             continue
-        out.stamps.append(Planned(Path(meta["filename"]), meta["lineno"], entry.payee, classify(meta, rules)))
+        out.stamps.append(Planned(Path(meta["filename"]), meta["lineno"], getattr(entry, "payee", None), classify(meta, rules)))
     return out
 
 
@@ -170,7 +171,7 @@ def _lines_for(stamp: Stamp, indent: str, today: str) -> list[str]:
 
 
 def apply(p: Plan) -> None:
-    """Insert each stamp directly under its transaction's header line."""
+    """Insert each stamp directly under its entry's first line."""
     by_file: dict[Path, list[Planned]] = {}
     for planned in p.stamps:
         by_file.setdefault(planned.path, []).append(planned)
@@ -178,8 +179,11 @@ def apply(p: Plan) -> None:
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         for planned in sorted(items, key=lambda x: x.lineno, reverse=True):
             header = planned.lineno - 1
-            following = lines[header + 1] if header + 1 < len(lines) else ""
-            indent = following[: len(following) - len(following.lstrip())] or "  "
+            following = (lines[header + 1] if header + 1 < len(lines) else "").rstrip("\r\n")
+            # Copy the indent of an indented next line (a posting or existing metadata).
+            # A blank or unindented next line (a balance's neighbour) has none to copy.
+            indent = following[: len(following) - len(following.lstrip())] if following.strip() else ""
+            indent = indent or "  "
             lines[header + 1 : header + 1] = _lines_for(planned.stamp, indent, p.today)
         path.write_text("".join(lines), encoding="utf-8")
 
