@@ -130,7 +130,7 @@ class TestEvaluate:
 
 
 class TestLegacy:
-    """`source: "legacy"` is the explicit unknown (mike.dotfiles ADR 0013)."""
+    """`source: "legacy"` is the explicit unknown (mike.dotfiles ADR 0014)."""
 
     def test_legacy_is_its_own_metric_not_provenance_and_not_a_gap(self, tmp_path: Path):
         entries = load(tmp_path, txn("2010-01-02", "Tesco", "Food", '  source: "legacy"\n'))

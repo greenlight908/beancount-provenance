@@ -19,7 +19,7 @@ PROVENANCE_KEYS = ("source", "script")
 METRICS = ("provenance", "payee", "narration", "legacy")
 
 # `source: "legacy"` with no `script` is the explicit "unknown" a backfill writes where an
-# entry records no evidence of its origin (mike.dotfiles ADR 0013). It is not a gap, but
+# entry records no evidence of its origin (mike.dotfiles ADR 0014). It is not a gap, but
 # it is not provenance either, so it is counted on its own.
 LEGACY_SOURCE = "legacy"
 
