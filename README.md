@@ -16,6 +16,9 @@ The ledger declares its backlog and the count may only shrink:
 
 - **Provenance** is a non-empty `source` (the document an entry came from) or `script` (the
   importer, tool or agent that wrote it). `created_at` alone is a timestamp, not an origin.
+- **`legacy` is the explicit unknown.** A backfill that finds no evidence of an entry's
+  origin writes `source: "legacy"`. That is neither a gap nor provenance: it is counted as
+  its own `legacy` metric, whose undeclared baseline is 0, so the default can only fail.
 - **Per transaction**, not per posting.
 - **Pads are exempt.** The `P` transactions beancount generates from a `pad` carry no
   metadata of their own; the `balance` assertion behind them is what has a source.
@@ -31,7 +34,7 @@ Known limit: a change that fixes one old gap and adds one new one nets to zero a
 ```yaml
 repos:
   - repo: https://github.com/greenlight908/beancount-provenance
-    rev: <commit sha>  # v0.1.0
+    rev: <commit sha>  # v0.2.0
     hooks:
       - id: check-beancount-provenance
 ```
