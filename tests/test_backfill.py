@@ -1,4 +1,4 @@
-"""Tests for the backfill engine (mike.dotfiles ADR 0014/0015).
+"""Tests for the backfill engine (mike.dotfiles ADRs 0014/0016).
 
 The safety property under test: a stamp is written only from evidence the entry itself
 records, as named by the ledger's declared rules; every stamp names its rule; an entry
