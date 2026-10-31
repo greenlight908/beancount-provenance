@@ -1,0 +1,17 @@
+# Hooks this package exposes to CONSUMERS via pre-commit's remote-repo mechanism.
+# A ledger enables the gate with:
+#
+#   - repo: https://github.com/greenlight908/beancount-provenance
+#     rev: <commit sha>  # v0.1.0
+#     hooks:
+#       - id: check-beancount-provenance
+#
+# (This is distinct from .pre-commit-config.yaml, which is THIS repo's own dev hooks.)
+- id: check-beancount-provenance
+  name: Check every Beancount transaction has provenance, payee and narration
+  description: Fail if a ledger's provenance, payee or narration gaps differ from the baselines it declares, or it has no baselines, or it does not load.
+  entry: check-beancount-provenance
+  language: python
+  # The gate reads the whole ledger from its root, so a file list means nothing to it.
+  pass_filenames: false
+  files: \.beancount$
