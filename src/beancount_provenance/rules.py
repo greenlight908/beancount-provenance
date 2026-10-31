@@ -16,7 +16,17 @@ from beancount.core import data, flags
 # is an attribute of provenance, not a substitute for wasDerivedFrom/wasGeneratedBy).
 PROVENANCE_KEYS = ("source", "script")
 
-METRICS = ("provenance", "payee", "narration")
+METRICS = ("provenance", "payee", "narration", "legacy")
+
+# `source: "legacy"` with no `script` is the explicit "unknown" a backfill writes where an
+# entry records no evidence of its origin (mike.dotfiles ADR 0013). It is not a gap, but
+# it is not provenance either, so it is counted on its own.
+LEGACY_SOURCE = "legacy"
+
+# Metrics whose undeclared baseline means 0 rather than "unmeasured". Zero is the
+# strictest value, so the default can only fail a ledger, never hide anything; and a
+# ledger that has never written `legacy` need not declare it.
+DEFAULT_ZERO = frozenset({"legacy"})
 
 # `<date> custom "wnd-baseline" "<metric>" "<count>"` in the ledger.
 BASELINE_DIRECTIVE = "wnd-baseline"
@@ -27,7 +37,7 @@ def _blank(value: object) -> bool:
 
 
 def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
-    """Count transactions missing provenance, payee and narration.
+    """Count transactions missing provenance, payee and narration, and `legacy` ones.
 
     Per transaction, not per posting: provenance describes the entry's origin. The
     transactions beancount synthesises from a `Pad` at load time carry no metadata of
@@ -41,6 +51,8 @@ def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
         meta = entry.meta or {}
         if all(_blank(meta.get(key)) for key in PROVENANCE_KEYS):
             gaps["provenance"] += 1
+        elif _blank(meta.get("script")) and str(meta.get("source")).strip() == LEGACY_SOURCE:
+            gaps["legacy"] += 1
         if _blank(entry.payee):
             gaps["payee"] += 1
         if _blank(entry.narration):
@@ -74,16 +86,18 @@ def evaluate(gaps: dict[str, int], baselines: dict[str, int]) -> dict[str, Any]:
 
     Growth is a new gap. Slack (a baseline above the count) fails too: it is room a new
     gap could spend unseen, so the baseline is ratcheted down in the same change that
-    burned the backlog. A missing baseline is unmeasured, never clean.
+    burned the backlog. A missing baseline is unmeasured, never clean -- except for
+    the `DEFAULT_ZERO` metrics, where undeclared means 0.
     """
     grown: list[dict[str, Any]] = []
     slack: list[dict[str, Any]] = []
     missing: list[str] = []
     for metric in METRICS:
-        if metric not in baselines:
+        if metric not in baselines and metric not in DEFAULT_ZERO:
             missing.append(metric)
             continue
-        row = {"metric": metric, "count": gaps[metric], "baseline": baselines[metric], "delta": gaps[metric] - baselines[metric]}
+        base = baselines.get(metric, 0)
+        row = {"metric": metric, "count": gaps[metric], "baseline": base, "delta": gaps[metric] - base}
         if row["delta"] > 0:
             grown.append(row)
         elif row["delta"] < 0:

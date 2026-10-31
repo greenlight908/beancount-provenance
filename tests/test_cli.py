@@ -49,7 +49,7 @@ def test_holding_at_baseline_exits_zero(tmp_path, capsys):
     code, out = run(tmp_path, LEDGER + BASELINES, capsys)
     assert code == 0
     assert out["ok"] is True
-    assert out["counts"] == {"provenance": 1, "payee": 0, "narration": 0}
+    assert out["counts"] == {"provenance": 1, "payee": 0, "narration": 0, "legacy": 0}
 
 
 def test_a_new_unstamped_transaction_exits_one(tmp_path, capsys):
