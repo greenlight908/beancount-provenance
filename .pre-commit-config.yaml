@@ -18,12 +18,23 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.7
+  # ruff runs from the project's uv.lock, the version CI runs, so Renovate's lock bump
+  # moves both. A pinned astral-sh/ruff-pre-commit `rev` was a second copy Renovate never
+  # bumped (SDLC policy R4, 47-ruff-pin-drift). Flags mirror ruff-pre-commit's own hooks.
+  - repo: local
     hooks:
       - id: ruff-check
-        args: [--fix]
+        name: ruff check
+        entry: uv run ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
       - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
 
   - repo: local
     hooks:
