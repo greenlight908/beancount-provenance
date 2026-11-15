@@ -22,6 +22,10 @@ The ledger declares its backlog and the count may only shrink:
 - **Balance assertions too.** A `balance` with no `source`/`script` is counted as its own
   `balance` metric (undeclared baseline 0, like `legacy`); the backfill stamps them as well.
   `pad` directives are exempt: they are derived from the assertion that follows them.
+- **An agent names itself.** An entry whose `source` names an AI agent (Claude, Codex,
+  ChatGPT, Gemini) but has no `script` is counted as `agent_unscripted` (undeclared baseline
+  0). The `source` says where the data came from; an agent also sets `script` to say who
+  wrote the entry (`script: "claude-code"`).
 - **Per transaction**, not per posting.
 - **Pads are exempt.** The `P` transactions beancount generates from a `pad` carry no
   metadata of their own; the `balance` assertion behind them is what has a source.
@@ -37,7 +41,7 @@ Known limit: a change that fixes one old gap and adds one new one nets to zero a
 ```yaml
 repos:
   - repo: https://github.com/greenlight908/beancount-provenance
-    rev: <commit sha>  # v0.4.0
+    rev: <commit sha>  # v0.5.0
     hooks:
       - id: check-beancount-provenance
 ```

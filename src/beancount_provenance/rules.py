@@ -5,6 +5,7 @@ Pure functions over loaded entries, so each rule is testable without a filesyste
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -16,7 +17,7 @@ from beancount.core import data, flags
 # is an attribute of provenance, not a substitute for wasDerivedFrom/wasGeneratedBy).
 PROVENANCE_KEYS = ("source", "script")
 
-METRICS = ("provenance", "payee", "narration", "legacy", "balance")
+METRICS = ("provenance", "payee", "narration", "legacy", "balance", "agent_unscripted")
 
 # `source: "legacy"` with no `script` is the explicit "unknown" a backfill writes where an
 # entry records no evidence of its origin (mike.dotfiles ADR 0014). It is not a gap, but
@@ -26,7 +27,14 @@ LEGACY_SOURCE = "legacy"
 # Metrics whose undeclared baseline means 0 rather than "unmeasured". Zero is the
 # strictest value, so the default can only fail a ledger, never hide anything; and a
 # ledger that has never written `legacy` need not declare it.
-DEFAULT_ZERO = frozenset({"legacy", "balance"})
+DEFAULT_ZERO = frozenset({"legacy", "balance", "agent_unscripted"})
+
+# A `source` naming an AI agent ("Pasted text via Claude ...", "pasted into claude") says
+# where the data came from but not who wrote the entry. An agent sets `script` too
+# (mike.dotfiles Ledger Provenance Policy P5), so such an entry with no `script` is counted
+# as `agent_unscripted`. It is still provenance, never a `provenance` gap. The category is
+# "an agent wrote it", so it names agents, not one vendor; extend the list, never narrow it.
+AGENT_SOURCE = re.compile(r"\b(claude|codex|chatgpt|gemini)\b", re.IGNORECASE)
 
 # `<date> custom "wnd-baseline" "<metric>" "<count>"` in the ledger.
 BASELINE_DIRECTIVE = "wnd-baseline"
@@ -38,6 +46,10 @@ def _blank(value: object) -> bool:
 
 def _is_legacy(meta: dict[str, Any]) -> bool:
     return _blank(meta.get("script")) and str(meta.get("source")).strip() == LEGACY_SOURCE
+
+
+def _is_agent_unscripted(meta: dict[str, Any]) -> bool:
+    return _blank(meta.get("script")) and bool(AGENT_SOURCE.search(str(meta.get("source") or "")))
 
 
 def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
@@ -59,6 +71,8 @@ def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
                 gaps["balance"] += 1
             elif _is_legacy(meta):
                 gaps["legacy"] += 1
+            if _is_agent_unscripted(meta):
+                gaps["agent_unscripted"] += 1
             continue
         if not isinstance(entry, data.Transaction) or entry.flag == flags.FLAG_PADDING:
             continue
@@ -67,6 +81,8 @@ def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
             gaps["provenance"] += 1
         elif _is_legacy(meta):
             gaps["legacy"] += 1
+        if _is_agent_unscripted(meta):
+            gaps["agent_unscripted"] += 1
         if _blank(entry.payee):
             gaps["payee"] += 1
         if _blank(entry.narration):
