@@ -84,7 +84,7 @@ class TestCounting:
         body = '\n2010-01-02 pad Assets:Cash Equity:Opening\n2010-01-03 balance Assets:Cash 50.00 GBP\n  source: "statement"\n'
         entries = load(tmp_path, body)
         assert any(getattr(e, "flag", None) == "P" for e in entries), "control: the pad must have been expanded"
-        assert count_gaps(entries) == {"provenance": 0, "payee": 0, "narration": 0, "legacy": 0, "balance": 0}
+        assert count_gaps(entries) == {"provenance": 0, "payee": 0, "narration": 0, "legacy": 0, "balance": 0, "agent_unscripted": 0}
 
 
 class TestBaselines:
@@ -100,7 +100,7 @@ class TestBaselines:
         assert read_baselines(entries) == {}
 
 
-GAPS = {"provenance": 10, "payee": 3, "narration": 0, "legacy": 0, "balance": 0}
+GAPS = {"provenance": 10, "payee": 3, "narration": 0, "legacy": 0, "balance": 0, "agent_unscripted": 0}
 # Baselines as a ledger that never adopted `legacy` declares them.
 DECLARED = {"provenance": 10, "payee": 3, "narration": 0}
 
@@ -177,3 +177,39 @@ class TestBalance:
         verdict = evaluate({**GAPS, "balance": 2}, dict(DECLARED))
         assert verdict["missing"] == []
         assert [(r["metric"], r["delta"]) for r in verdict["grown"]] == [("balance", 2)]
+
+
+class TestAgentUnscripted:
+    """P5: an agent-written entry names its source AND sets `script` (mike.dotfiles policy P5).
+
+    A `source` naming an agent ("Pasted text via Claude ...") with no `script` is still
+    provenance, so it is not a `provenance` gap; it is counted on its own.
+    """
+
+    def test_an_agent_source_without_script_counts(self, tmp_path: Path):
+        entries = load(tmp_path, txn("2010-01-02", "Tesco", "Food", '  source: "Pasted text via Claude 2010-01-02"\n'))
+        gaps = count_gaps(entries)
+        assert (gaps["provenance"], gaps["agent_unscripted"]) == (0, 1)
+
+    def test_an_agent_source_with_script_does_not_count(self, tmp_path: Path):
+        entries = load(tmp_path, txn("2010-01-02", "Tesco", "Food", '  source: "pasted into claude"\n  script: "claude-code"\n'))
+        assert count_gaps(entries)["agent_unscripted"] == 0
+
+    def test_a_non_agent_source_does_not_count(self, tmp_path: Path):
+        entries = load(tmp_path, txn("2010-01-02", "Tesco", "Food", '  source: "bank statement 2010-01"\n'))
+        assert count_gaps(entries)["agent_unscripted"] == 0
+
+    def test_codex_is_an_agent_too(self, tmp_path: Path):
+        """The category is "an agent wrote it", not one vendor."""
+        entries = load(tmp_path, txn("2010-01-02", "Tesco", "Food", '  source: "statement via Codex"\n'))
+        assert count_gaps(entries)["agent_unscripted"] == 1
+
+    def test_a_balance_with_an_agent_source_and_no_script_counts(self, tmp_path: Path):
+        entries = load(tmp_path, '\n2010-01-03 balance Assets:Cash 0.00 GBP\n  source: "pasted into claude"\n')
+        gaps = count_gaps(entries)
+        assert (gaps["balance"], gaps["agent_unscripted"]) == (0, 1)
+
+    def test_an_undeclared_agent_unscripted_baseline_is_zero(self):
+        verdict = evaluate({**GAPS, "agent_unscripted": 1}, dict(DECLARED))
+        assert verdict["missing"] == []
+        assert [(r["metric"], r["delta"]) for r in verdict["grown"]] == [("agent_unscripted", 1)]
