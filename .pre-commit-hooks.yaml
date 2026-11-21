@@ -1,12 +1,21 @@
 # Hooks this package exposes to CONSUMERS via pre-commit's remote-repo mechanism.
-# A ledger enables the gate with:
+# A ledger enables the gates with:
 #
 #   - repo: https://github.com/greenlight908/beancount-provenance
-#     rev: <commit sha>  # v0.1.0
+#     rev: <commit sha>  # v0.6.0
 #     hooks:
+#       - id: check-beancount-invariants
 #       - id: check-beancount-provenance
 #
 # (This is distinct from .pre-commit-config.yaml, which is THIS repo's own dev hooks.)
+- id: check-beancount-invariants
+  name: Check Beancount cost basis, currency constraints and one commodity per open leaf
+  description: Fail if an Assets security is held at a price with no cost, a balance-sheet open pins no commodity, or an open balance-sheet account holds or permits more than one commodity.
+  entry: check-beancount-invariants
+  language: python
+  # The rules read the whole ledger from its root, so a file list means nothing to them.
+  pass_filenames: false
+  files: \.beancount$
 - id: check-beancount-provenance
   name: Check every Beancount transaction has provenance, payee and narration
   description: Fail if a ledger's provenance, payee or narration gaps differ from the baselines it declares, or it has no baselines, or it does not load.
