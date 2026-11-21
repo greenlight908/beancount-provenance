@@ -1,7 +1,11 @@
 # beancount-provenance
 
-A pre-commit hook that fails if a **Beancount ledger gains a transaction nobody can trace**:
-one with no `source` or `script` metadata, no payee, or no narration.
+Two pre-commit hooks for Beancount ledgers:
+
+- **`check-beancount-provenance`** fails if a **ledger gains a transaction nobody can trace**:
+  one with no `source` or `script` metadata, no payee, or no narration.
+- **`check-beancount-invariants`** fails if the ledger breaks one of three structural rules
+  (see [Invariants](#invariants)).
 
 Most ledgers carry a historical backlog of such entries, so the gate does not demand zero.
 The ledger declares its backlog and the count may only shrink:
@@ -36,20 +40,44 @@ The ledger declares its backlog and the count may only shrink:
 
 Known limit: a change that fixes one old gap and adds one new one nets to zero and passes.
 
+## Invariants
+
+`check-beancount-invariants` judges only what is written in the ledger, so its verdict can
+change only with a commit: a commit-time gate, not a periodic sweep.
+
+- **Cost basis.** An `Assets:` posting of a *security* bought at a price with no cost
+  (`10 VWRL @@ 1000 GBP`) cannot yield a realised gain on sale; write `{}`. Currency-like
+  commodities are exempt: a 3-letter ISO code, an operating currency, a well-known
+  stablecoin, or a `commodity` whose `asset-class` names it crypto, stablecoin or fiat.
+- **Currency constraint.** Every `Assets:`/`Liabilities:` `open` pins its commodities, so
+  `bean-check` rejects a wrong-commodity posting.
+- **One commodity per open leaf.** An open `Assets:`/`Liabilities:` account holds *and
+  declares* at most one commodity; several make it a container with one leaf per commodity
+  (the Beancount Cookbook's `Assets:US:ETrade:Cash USD` beside `Assets:US:ETrade:FB FB`).
+  Closed accounts are out of scope. There is no dust threshold.
+
+Each has a reviewed escape hatch, metadata carrying a free-text reason:
+`ignore-for-cost-basis-check` on the transaction, `ignore-for-currency-constraint-check` and
+`ignore-for-one-commodity-check` on the `open`. A ledger with no balance-sheet accounts exits 2.
+
 ## Usage
 
 ```yaml
 repos:
   - repo: https://github.com/greenlight908/beancount-provenance
-    rev: <commit sha>  # v0.5.0
+    rev: <commit sha>  # v0.6.0
     hooks:
+      - id: check-beancount-invariants
       - id: check-beancount-provenance
 ```
 
-In CI, run the same pinned hook: `uvx pre-commit run check-beancount-provenance --all-files`.
+In CI, run the same pinned hooks:
+`uvx pre-commit run check-beancount-invariants --all-files` and the same for
+`check-beancount-provenance`.
 
-By hand: `check-beancount-provenance [--ledger main.beancount]`. Output is JSON; exit 0 pass,
-1 refused, 2 could not read the ledger.
+By hand: `check-beancount-invariants` or `check-beancount-provenance`, each taking
+`[--ledger main.beancount]`. Output is JSON; exit 0 pass, 1 refused, 2 could not read the
+ledger.
 
 The hook runs in pre-commit's own environment, so a ledger that loads a custom plugin must
 list it under the hook's `additional_dependencies`.
