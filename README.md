@@ -31,8 +31,9 @@ The ledger declares its backlog and the count may only shrink:
   0). The `source` says where the data came from; an agent also sets `script` to say who
   wrote the entry (`script: "claude-code"`).
 - **Per transaction**, not per posting.
-- **Pads are exempt.** The `P` transactions beancount generates from a `pad` carry no
-  metadata of their own; the `balance` assertion behind them is what has a source.
+- **Only pad-generated `P` transactions are exempt.** The ones beancount generates from a
+  `pad` carry no metadata of their own; the `balance` assertion behind them is what has a
+  source. A `P` transaction written in a ledger file counts like any other.
 - **The gate passes only when every count equals its baseline.** Growth fails (a new gap).
   Slack fails too: a baseline above the count is room a new gap could spend unseen, so lower
   it in the same change. A missing baseline fails, with the lines to paste in `fix`.
@@ -65,7 +66,7 @@ Each has a reviewed escape hatch, metadata carrying a free-text reason:
 ```yaml
 repos:
   - repo: https://github.com/greenlight908/beancount-provenance
-    rev: <commit sha>  # v0.6.0
+    rev: <commit sha>  # v0.7.0
     hooks:
       - id: check-beancount-invariants
       - id: check-beancount-provenance

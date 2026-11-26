@@ -40,9 +40,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from beancount.core import data, flags
+from beancount.core import data
 
-from .rules import LEGACY_SOURCE, PROVENANCE_KEYS
+from .rules import LEGACY_SOURCE, PROVENANCE_KEYS, pad_synthesised
 
 TOOL = "beancount-provenance backfill"
 CONFIG_NAME = ".beancount-provenance.toml"
@@ -144,8 +144,9 @@ def plan(ledger: Path, rules: list[Rule], today: str) -> Plan:
     if errors:
         raise LedgerError(f"ledger has {len(errors)} validation error(s); run bean-check")
     out = Plan(today)
+    is_pad = pad_synthesised(entries)
     for entry in entries:
-        is_txn = isinstance(entry, data.Transaction) and entry.flag != flags.FLAG_PADDING
+        is_txn = isinstance(entry, data.Transaction) and not is_pad(entry)
         if not (is_txn or isinstance(entry, data.Balance)):
             continue
         meta = entry.meta or {}

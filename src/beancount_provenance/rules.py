@@ -6,7 +6,7 @@ Pure functions over loaded entries, so each rule is testable without a filesyste
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from beancount.core import data, flags
@@ -52,6 +52,22 @@ def _is_agent_unscripted(meta: dict[str, Any]) -> bool:
     return _blank(meta.get("script")) and bool(AGENT_SOURCE.search(str(meta.get("source") or "")))
 
 
+def pad_synthesised(entries: Iterable[Any]) -> Callable[[Any], bool]:
+    """A predicate for the `P` transactions beancount synthesised from a `Pad`.
+
+    `beancount.ops.pad` builds each one with `active_pad.meta.copy()`, so its
+    filename/lineno is the pad directive's own. A hand-written `P` has a line of its
+    own that no `Pad` shares, so it is not exempt (ledger-provenance policy P1).
+    """
+    pad_sites = {(e.meta.get("filename"), e.meta.get("lineno")) for e in entries if isinstance(e, data.Pad) and e.meta}
+
+    def is_synthesised(entry: Any) -> bool:
+        meta = entry.meta or {}
+        return isinstance(entry, data.Transaction) and entry.flag == flags.FLAG_PADDING and (meta.get("filename"), meta.get("lineno")) in pad_sites
+
+    return is_synthesised
+
+
 def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
     """Count transactions missing provenance, payee and narration; `balance` assertions
     missing provenance; and entries of either kind marked `legacy`.
@@ -59,8 +75,11 @@ def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
     Per transaction, not per posting: provenance describes the entry's origin. The
     transactions beancount synthesises from a `Pad` at load time carry no metadata of
     their own and are exempt with their pad; the assertion that drives them is the
-    thing with a source.
+    thing with a source. A `P`-flagged transaction written in a file is not synthesised
+    and counts like any other.
     """
+    entries = list(entries)
+    is_pad = pad_synthesised(entries)
     gaps: dict[str, int] = dict.fromkeys(METRICS, 0)
     for entry in entries:
         if isinstance(entry, data.Balance):
@@ -74,7 +93,7 @@ def count_gaps(entries: Iterable[Any]) -> dict[str, int]:
             if _is_agent_unscripted(meta):
                 gaps["agent_unscripted"] += 1
             continue
-        if not isinstance(entry, data.Transaction) or entry.flag == flags.FLAG_PADDING:
+        if not isinstance(entry, data.Transaction) or is_pad(entry):
             continue
         meta = entry.meta or {}
         if all(_blank(meta.get(key)) for key in PROVENANCE_KEYS):
