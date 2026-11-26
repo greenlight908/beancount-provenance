@@ -116,6 +116,10 @@ class TestPlanAndApply:
         )
         assert [(p.payee, p.stamp.rule) for p in plan(path, RULES, today="2026-10-31").stamps] == [("Boots", "no-evidence")]
 
+    def test_a_hand_written_p_transaction_is_planned(self, tmp_path):
+        path = _ledger(tmp_path, _txn(head='2026-11-25 P "Test Payee" "hand-written"'))
+        assert [p.payee for p in plan(path, RULES, today="2026-11-26").stamps] == ["Test Payee"]
+
     def test_a_blank_provenance_key_is_refused_not_duplicated(self, tmp_path):
         p = plan(_ledger(tmp_path, _txn('  source: ""\n')), RULES, today="2026-10-31")
         assert (p.stamps, len(p.refused)) == ([], 1)

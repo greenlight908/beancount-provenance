@@ -86,6 +86,20 @@ class TestCounting:
         assert any(getattr(e, "flag", None) == "P" for e in entries), "control: the pad must have been expanded"
         assert count_gaps(entries) == {"provenance": 0, "payee": 0, "narration": 0, "legacy": 0, "balance": 0, "agent_unscripted": 0}
 
+    def test_a_hand_written_p_transaction_is_a_gap(self, tmp_path: Path):
+        """Policy P1: only a `Pad`'s synthesised `P` is exempt, not any `P`-flagged entry.
+
+        The 2026-11-25 audit loaded an unstamped hand-written `P` and the gate passed it.
+        """
+        body = '\n2026-11-25 P "Test Payee" "hand-written"\n  Assets:Cash  -1.00 GBP\n  Expenses:Food  1.00 GBP\n'
+        entries = load(tmp_path, body)
+        assert count_gaps(entries)["provenance"] == 1
+
+    def test_a_hand_written_p_beside_a_pad_is_still_a_gap(self, tmp_path: Path):
+        """Control: the pad stays exempt while the hand-written `P` next to it counts."""
+        body = '\n2010-01-02 pad Assets:Cash Equity:Opening\n2010-01-03 balance Assets:Cash 50.00 GBP\n  source: "statement"\n\n2026-11-25 P "Test Payee" "hand-written"\n  Assets:Cash  -1.00 GBP\n  Expenses:Food  1.00 GBP\n'
+        assert count_gaps(load(tmp_path, body))["provenance"] == 1
+
 
 class TestBaselines:
     def test_baselines_are_read_from_the_ledger(self, tmp_path: Path):
